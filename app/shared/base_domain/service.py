@@ -9,9 +9,11 @@ from app.shared.pagination import PageResponse
 from abc import ABC, abstractmethod
 
 T = TypeVar("T", bound=BaseTable)
+P_create = TypeVar("P_create", bound=BaseModel)
+P_update = TypeVar("P_update", bound=BaseModel)
 
 
-class IBaseService(ABC, Generic[T]):
+class IBaseService(ABC, Generic[T, P_create, P_update]):
     entity_name: str
 
     @abstractmethod
@@ -23,11 +25,11 @@ class IBaseService(ABC, Generic[T]):
         raise NotImplementedError
 
     @abstractmethod
-    def create_entity(self, payload: BaseModel) -> T:
+    def create_entity(self, payload: P_create) -> T:
         raise NotImplementedError
 
     @abstractmethod
-    def update_entity(self, id: UUID, payload: BaseModel) -> T:
+    def update_entity(self, id: UUID, payload: P_update) -> T:
         raise NotImplementedError
 
     @abstractmethod
@@ -35,7 +37,7 @@ class IBaseService(ABC, Generic[T]):
         raise NotImplementedError
 
 
-class BaseService(IBaseService[T], Generic[T]):
+class BaseService(IBaseService[T, P_create, P_update], Generic[T, P_create, P_update]):
     entity_name: str = "Entidad"
     repository_class: type[BaseRepository] = None
 
@@ -52,10 +54,10 @@ class BaseService(IBaseService[T], Generic[T]):
         items, total = self.repository.get_all(offset, limit)
         return PageResponse(total=total, offset=offset, limit=limit, data=items)
 
-    def create_entity(self, payload: BaseModel) -> T:
+    def create_entity(self, payload: P_create) -> T:
         return self.repository.create(self._build_entity(payload))
 
-    def update_entity(self, id: UUID, payload: BaseModel) -> T:
+    def update_entity(self, id: UUID, payload: P_update) -> T:
         entity = self.get_by_id(id)
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(entity, field, value)
@@ -68,5 +70,5 @@ class BaseService(IBaseService[T], Generic[T]):
         self.repository.delete(entity)
         return True
 
-    def _build_entity(self, payload: BaseModel) -> T:
+    def _build_entity(self, payload: P_create | P_update) -> T:
         return self.repository.model(**payload.model_dump())

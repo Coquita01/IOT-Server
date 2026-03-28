@@ -12,4 +12,4 @@ class DeviceController(FullCrudApiController):
     update_schema = DeviceUpdate
 
 
-router = DeviceController().router
+device_router = DeviceController().router
