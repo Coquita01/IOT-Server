@@ -93,7 +93,7 @@ class TestLogin:
             },
         )
         assert response.status_code == 400
-        assert "Credenciales inválidas" in response.json()["detail"]
+        assert "Invalid credentials" in response.json()["detail"]
 
     def test_login_wrong_password(self, client: TestClient, master_admin_account: dict):
         """Test login with correct email but wrong password."""
@@ -105,7 +105,7 @@ class TestLogin:
             },
         )
         assert response.status_code == 400
-        assert "Credenciales inválidas" in response.json()["detail"]
+        assert "Invalid credentials" in response.json()["detail"]
 
     def test_login_inactive_account(
         self, client: TestClient, inactive_user_account: dict
@@ -119,7 +119,7 @@ class TestLogin:
             },
         )
         assert response.status_code == 400
-        assert "inactiva" in response.json()["detail"]
+        assert "inactive" in response.json()["detail"].lower()
 
     def test_login_email_too_short(self, client: TestClient):
         """Test login with email shorter than minimum length."""

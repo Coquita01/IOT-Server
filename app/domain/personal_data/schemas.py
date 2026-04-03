@@ -21,7 +21,7 @@ class NonCriticalPersonalDataCreate(BaseModel):
     @classmethod
     def validate_birth_date(cls, value: datetime) -> datetime:
         if value > datetime.now():
-            raise ValueError("birth_date no puede ser futura")
+            raise ValueError("birth_date cannot be in the future")
         return value
 
 
@@ -43,7 +43,7 @@ class NonCriticalPersonalDataUpdate(BaseModel):
     @classmethod
     def validate_birth_date(cls, value: datetime | None) -> datetime | None:
         if value is not None and value > datetime.now():
-            raise ValueError("birth_date no puede ser futura")
+            raise ValueError("birth_date cannot be in the future")
         return value
 
 
@@ -68,7 +68,7 @@ class SensitiveDataCreate(BaseModel):
     def normalize_email(cls, value: str) -> str:
         email = value.strip().lower()
         if "@" not in email or email.startswith("@") or email.endswith("@"):
-            raise ValueError("email inválido")
+            raise ValueError("invalid email")
         return email
 
     @field_validator("curp", "rfc")
@@ -93,7 +93,7 @@ class SensitiveDataUpdate(BaseModel):
             return None
         email = value.strip().lower()
         if "@" not in email or email.startswith("@") or email.endswith("@"):
-            raise ValueError("email inválido")
+            raise ValueError("invalid email")
         return email
 
     @field_validator("curp", "rfc")

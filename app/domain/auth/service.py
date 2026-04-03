@@ -61,17 +61,17 @@ class AuthService:
         sensitive_data = self.session.exec(stmt).first()
 
         if sensitive_data is None:
-            raise BadRequestException("Credenciales inválidas")
+            raise BadRequestException("Invalid credentials")
 
         if not verify_password(payload.password, sensitive_data.password_hash):
-            raise BadRequestException("Credenciales inválidas")
+            raise BadRequestException("Invalid credentials")
 
         account, account_type, is_master = self._resolve_account(sensitive_data)
         if account is None or account_type is None:
-            raise BadRequestException("La cuenta no tiene un perfil asociado")
+            raise BadRequestException("Account has no associated profile")
 
         if not account.is_active:
-            raise BadRequestException("La cuenta está inactiva")
+            raise BadRequestException("Account is inactive")
 
         token = create_access_token(
             {
@@ -95,17 +95,17 @@ class AuthService:
     ) -> MessageResponse:
         sensitive_data = self.session.get(SensitiveData, current.sensitive_data_id)
         if sensitive_data is None:
-            raise BadRequestException("No se encontró la cuenta asociada")
+            raise BadRequestException("Associated account was not found")
 
         if not verify_password(payload.current_password, sensitive_data.password_hash):
-            raise BadRequestException("La contraseña actual no es correcta")
+            raise BadRequestException("Current password is incorrect")
 
         sensitive_data.password_hash = get_password_hash(payload.new_password)
         self.session.add(sensitive_data)
         self.session.commit()
         self.session.refresh(sensitive_data)
 
-        return MessageResponse(message="Contraseña actualizada correctamente")
+        return MessageResponse(message="Password updated successfully")
 
 
 def get_auth_service(session: SessionDep) -> AuthService:
@@ -121,7 +121,7 @@ def get_current_account_from_request(request: Request) -> CurrentAccount:
     if not isinstance(current, dict):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No autenticado",
+            detail="Not authenticated",
         )
 
     try:
@@ -135,7 +135,7 @@ def get_current_account_from_request(request: Request) -> CurrentAccount:
     except (KeyError, ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contexto de autenticación inválido",
+            detail="Invalid authentication context",
         ) from exc
 
 
@@ -159,7 +159,7 @@ def require_admin(
     if current.account_type != "administrator":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren privilegios de administrador",
+            detail="Administrator privileges are required",
         )
     return current
 
@@ -171,7 +171,7 @@ def require_master_admin(
     if current.account_type != "administrator" or not current.is_master:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren privilegios de administrador master",
+            detail="Master administrator privileges are required",
         )
     return current
 
@@ -183,6 +183,6 @@ def require_admin_or_manager(
     if current.account_type not in {"administrator", "manager"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren privilegios de administrador o gerente",
+            detail="Administrator or manager privileges are required",
         )
     return current

@@ -99,7 +99,7 @@ class FullCrudApiController(ImmutableApiController):
 
         def delete(service: self.service_dep, resource_id: UUID):
             if not service.delete_entity(resource_id):
-                raise HTTPException(status.HTTP_404_NOT_FOUND, "Recurso no encontrado")
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Resource not found")
 
         self.router.add_api_route(
             "/{resource_id}",

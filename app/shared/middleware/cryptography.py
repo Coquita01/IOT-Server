@@ -25,7 +25,7 @@ class DecryptionMiddleware(BaseHTTPMiddleware):
         # para el login
         key = CryptoKey(secret="me_tienes_que_cambiar_2026")
         if not key:
-            return Response(content="Sesión no encontrada o expirada", status_code=401)
+            return Response(content="Session not found or expired", status_code=401)
 
         body = await request.body()
         if not body:
@@ -35,12 +35,12 @@ class DecryptionMiddleware(BaseHTTPMiddleware):
             body_json = json.loads(body.decode())
             encrypted_body = body_json.get("pl")
             if not encrypted_body:
-                raise Exception("Falta el campo 'pl' en el cuerpo")
+                raise Exception("Missing 'pl' field in request body")
 
             json_data = crypto.decrypt(encrypted_body, key)
             request._body = json.dumps(json_data).encode()
         except Exception as e:
-            return Response(content=f"Error al descifrar: {str(e)}", status_code=400)
+            return Response(content=f"Decryption error: {str(e)}", status_code=400)
 
         return await call_next(request)
 
@@ -77,4 +77,4 @@ class EncryptionMiddleware(BaseHTTPMiddleware):
                 headers={"Content-Type": "application/json"},
             )
         except Exception as e:
-            return Response(content=f"Error al cifrar: {str(e)}", status_code=500)
+            return Response(content=f"Encryption error: {str(e)}", status_code=500)

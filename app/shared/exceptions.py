@@ -4,14 +4,14 @@ class NotFoundException(HTTPException):
     def __init__(self, entity: str, id: any):
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"{entity} con id '{id}' no encontrado.",
+            detail=f"{entity} with id '{id}' was not found.",
         )
 
 class AlreadyExistsException(HTTPException):
     def __init__(self, entity: str, field: str, value: any):
         super().__init__(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"{entity} con {field} '{value}' ya existe.",
+            detail=f"{entity} with {field} '{value}' already exists.",
         )
 
 class BadRequestException(HTTPException):

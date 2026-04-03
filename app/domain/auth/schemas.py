@@ -12,7 +12,7 @@ class LoginRequest(BaseModel):
     def normalize_email(cls, value: str) -> str:
         email = value.strip().lower()
         if "@" not in email or email.startswith("@") or email.endswith("@"):
-            raise ValueError("email inválido")
+            raise ValueError("invalid email")
         return email
 
 

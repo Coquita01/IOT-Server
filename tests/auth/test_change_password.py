@@ -45,7 +45,7 @@ class TestChangePassword:
         assert response.status_code == 200
         data = response.json()
         assert "message" in data
-        assert "actualizada" in data["message"].lower()
+        assert "updated" in data["message"].lower()
 
     def test_change_password_wrong_current_password(
         self, client: TestClient, master_admin_account: dict
@@ -61,7 +61,7 @@ class TestChangePassword:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 400
-        assert "contraseña actual" in response.json()["detail"].lower()
+        assert "current password" in response.json()["detail"].lower()
 
     def test_change_password_without_token(self, client: TestClient):
         """Test password change without authentication token."""

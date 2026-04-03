@@ -10,7 +10,7 @@ class Payload(BaseModel):
     @classmethod
     def must_not_be_empty(cls, v: str) -> str:
         if not v.strip():
-            raise ValueError("pl no puede estar vacío")
+            raise ValueError("pl cannot be empty")
         return v
 
 
@@ -22,7 +22,7 @@ class CryptoKey(BaseModel):
     @classmethod
     def minimum_length(cls, v: str) -> str:
         if len(v) < 8:
-            raise ValueError("La clave debe tener al menos 8 caracteres")
+            raise ValueError("The key must have at least 8 characters")
         return v
 
 

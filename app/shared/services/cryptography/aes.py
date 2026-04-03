@@ -79,27 +79,27 @@ def create_aes_cryptography() -> AesCbcCryptography:
 if __name__ == "__main__":
     crypto = create_aes_cryptography()
 
-    key = CryptoKey(secret="mi_clave_super_secreta_2026")
+    key = CryptoKey(secret="my_super_secret_key_2026")
 
     data: dict[str, Any] = {
-        "nombre": "Juan",
-        "edad": 30,
-        "ciudad": "Madrid",
-        "activo": True,
+        "name": "John",
+        "age": 30,
+        "city": "Madrid",
+        "active": True,
     }
 
-    print(f"Texto original : {data}")
+    print(f"Original text  : {data}")
 
     payload = crypto.encrypt(data, key)
-    print(f"Payload cifrado: {payload.pl}")
+    print(f"Encrypted payload: {payload.pl}")
 
     decrypted = crypto.decrypt(payload, key)
-    print(f"Texto descifrado: {decrypted}")
+    print(f"Decrypted text : {decrypted}")
 
-    print(f"Datos coinciden : {data == decrypted}")
+    print(f"Data matches   : {data == decrypted}")
 
-    print("\n--- Compatibilidad con clave hex ---")
+    print("\n--- Hex key compatibility ---")
     hex_key = CryptoKey(secret=hashlib.sha256("1234567890".encode()).hexdigest())
     payload2 = crypto.encrypt(data, hex_key)
     decrypted2 = crypto.decrypt(payload2, hex_key)
-    print(f"Datos coinciden (hex key): {data == decrypted2}")
+    print(f"Data matches (hex key): {data == decrypted2}")

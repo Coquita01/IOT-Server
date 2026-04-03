@@ -38,7 +38,7 @@ class Human(BaseHTTPMiddleware):
         if not auth_header.startswith("Bearer "):
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Formato de token inválido"},
+                content={"detail": "Invalid token format"},
             )
 
         token = auth_header.replace("Bearer ", "", 1).strip()
@@ -54,13 +54,13 @@ class Human(BaseHTTPMiddleware):
             if not raw_account_id:
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"detail": "Token sin identificador de cuenta"},
+                    content={"detail": "Token is missing account identifier"},
                 )
 
             if account_type not in {"administrator", "manager", "user"}:
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"detail": "Tipo de cuenta inválido en el token"},
+                    content={"detail": "Invalid account type in token"},
                 )
 
             model_map = {
@@ -77,14 +77,13 @@ class Human(BaseHTTPMiddleware):
                 if account is None:
                     return JSONResponse(
                         status_code=status.HTTP_401_UNAUTHORIZED,
-                        content={"detail": "La cuenta del token no existe"},
+                        content={"detail": "Token account does not exist"},
                     )
 
-                # Ojo: si is_active en tu modelo es property derivada y falla, quita este bloque
                 if hasattr(account, "is_active") and not account.is_active:
                     return JSONResponse(
                         status_code=status.HTTP_401_UNAUTHORIZED,
-                        content={"detail": "La cuenta está inactiva"},
+                        content={"detail": "Account is inactive"},
                     )
 
                 request.state.current_account = {
@@ -96,10 +95,10 @@ class Human(BaseHTTPMiddleware):
                 }
 
         except Exception:
-            logger.exception("Error no controlado en middleware de autenticacion")
+            logger.exception("Unhandled error in authentication middleware")
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Token inválido o expirado"},
+                content={"detail": "Invalid or expired token"},
             )
 
         return await call_next(request)
