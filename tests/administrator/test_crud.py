@@ -94,6 +94,23 @@ class TestAdministratorList:
         assert data["limit"] == 10
         assert data["offset"] == 0
 
+    def test_list_administrators_items_do_not_expose_sensitive_fields(
+        self, client: TestClient, master_admin_account: dict
+    ):
+        """Test list endpoint does not expose sensitive fields in items."""
+        token = create_token(master_admin_account)
+        response = client.get(
+            "/api/v1/administrators",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        items = response.json().get("data", [])
+        sensitive_fields = {"password_hash", "curp", "rfc"}
+        for item in items:
+            # List payload must not leak sensitive identity fields.
+            assert sensitive_fields.isdisjoint(item.keys())
+
 
 class TestAdministratorRetrieve:
     """Test GET /administrators/{id} endpoint."""
@@ -148,6 +165,21 @@ class TestAdministratorRetrieve:
         )
         assert response.status_code == 403
 
+    def test_retrieve_administrator_response_does_not_expose_sensitive_fields(
+        self, client: TestClient, master_admin_account: dict
+    ):
+        """Test retrieve endpoint does not expose sensitive fields."""
+        token = create_token(master_admin_account)
+        response = client.get(
+            f"/api/v1/administrators/{master_admin_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        sensitive_fields = {"password_hash", "curp", "rfc"}
+        assert sensitive_fields.isdisjoint(data.keys())
+
 
 class TestAdministratorCreate:
     """Test POST /administrators endpoint."""
@@ -168,7 +200,7 @@ class TestAdministratorCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "new_admin@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "NEWC111111HDFRRL09",
             "rfc": "NEWC111111AB0",
         }
@@ -202,7 +234,7 @@ class TestAdministratorCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": regular_admin_account["email"],
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "DUPC111111HDFRRL09",
             "rfc": "DUPC111111AB0",
         }
@@ -229,7 +261,7 @@ class TestAdministratorCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "test@example.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "MISS111111HDFRRL09",
             "rfc": "MISS111111AB0",
         }
@@ -257,7 +289,7 @@ class TestAdministratorCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "admin_phone@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "PHON111111HDFRRL09",
             "rfc": "PHON111111AB0",
         }
@@ -285,7 +317,7 @@ class TestAdministratorCreate:
             "postal_code": "123",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "admin_postal@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "POST111111HDFRRL09",
             "rfc": "POST111111AB0",
         }
@@ -313,7 +345,7 @@ class TestAdministratorCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "admin_curp@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "INVALID",
             "rfc": "CURP111111AB0",
         }
@@ -341,7 +373,7 @@ class TestAdministratorCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "admin_rfc@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "CURF111111HDFRRL09",
             "rfc": "INVALID",
         }
@@ -370,7 +402,7 @@ class TestAdministratorCreate:
             "postal_code": "06500",
             "birth_date": future_date,
             "email": "admin_birth@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "FUTE111111HDFRRL09",
             "rfc": "FUTE111111AB0",
         }
@@ -398,7 +430,7 @@ class TestAdministratorCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "test@example.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "ABCD111111HDFRRL09",
             "rfc": "ABCD111111AB0",
         }
@@ -426,7 +458,7 @@ class TestAdministratorCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "test@example.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "ABCD111111HDFRRL09",
             "rfc": "ABCD111111AB0",
         }
@@ -559,6 +591,79 @@ class TestAdministratorUpdate:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 403
+
+    def test_update_administrator_partial_is_atomic_for_first_name(
+        self,
+        client: TestClient,
+        master_admin_account: dict,
+        regular_admin_account: dict,
+    ):
+        """Test first_name patch updates only that field and keeps others intact."""
+        token = create_token(master_admin_account)
+
+        before_response = client.get(
+            f"/api/v1/administrators/{regular_admin_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert before_response.status_code == 200
+        before_data = before_response.json()
+
+        patch_response = client.patch(
+            f"/api/v1/administrators/{regular_admin_account['id']}",
+            json={"first_name": "AtomicAdminName"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert patch_response.status_code == 200
+
+        after_response = client.get(
+            f"/api/v1/administrators/{regular_admin_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert after_response.status_code == 200
+        after_data = after_response.json()
+
+        assert after_data["first_name"] == "AtomicAdminName"
+        assert after_data["last_name"] == before_data["last_name"]
+        # Some response schemas do not expose phone; verify it only when present.
+        if "phone" in before_data and "phone" in after_data:
+            assert after_data["phone"] == before_data["phone"]
+
+    def test_update_administrator_partial_is_atomic_for_is_active(
+        self,
+        client: TestClient,
+        master_admin_account: dict,
+        regular_admin_account: dict,
+    ):
+        """Test is_active patch updates only status and keeps identity fields intact."""
+        token = create_token(master_admin_account)
+
+        before_response = client.get(
+            f"/api/v1/administrators/{regular_admin_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert before_response.status_code == 200
+        before_data = before_response.json()
+
+        patch_response = client.patch(
+            f"/api/v1/administrators/{regular_admin_account['id']}",
+            json={"is_active": False},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert patch_response.status_code == 200
+
+        after_response = client.get(
+            f"/api/v1/administrators/{regular_admin_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert after_response.status_code == 200
+        after_data = after_response.json()
+
+        assert after_data["is_active"] is False
+        assert after_data["first_name"] == before_data["first_name"]
+        assert after_data["last_name"] == before_data["last_name"]
+        # Some response schemas do not expose phone; verify it only when present.
+        if "phone" in before_data and "phone" in after_data:
+            assert after_data["phone"] == before_data["phone"]
 
 
 class TestAdministratorDelete:

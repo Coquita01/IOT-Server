@@ -86,6 +86,21 @@ class TestChangePassword:
         )
         assert response.status_code == 401
 
+    def test_change_password_header_without_bearer_prefix_returns_401(
+        self, client: TestClient, master_admin_account: dict
+    ):
+        """Test password change rejects auth headers without Bearer prefix."""
+        token = create_token(master_admin_account)
+        response = client.patch(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": master_admin_account["password"],
+                "new_password": "NewPassword123!",
+            },
+            headers={"Authorization": token},
+        )
+        assert response.status_code == 401
+
     def test_change_password_new_too_short(
         self, client: TestClient, master_admin_account: dict
     ):
@@ -131,6 +146,54 @@ class TestChangePassword:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 422
+
+    def test_change_password_missing_current_password_returns_422(
+        self, client: TestClient, master_admin_account: dict
+    ):
+        """Test password change rejects payloads without current password."""
+        token = create_token(master_admin_account)
+        response = client.patch(
+            "/api/v1/auth/change-password",
+            json={
+                "new_password": "NewPassword123!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_change_password_missing_new_password_returns_422(
+        self, client: TestClient, master_admin_account: dict
+    ):
+        """Test password change rejects payloads without new password."""
+        token = create_token(master_admin_account)
+        response = client.patch(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": master_admin_account["password"],
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 422
+
+    def test_change_password_response_does_not_expose_sensitive_fields(
+        self, client: TestClient, master_admin_account: dict
+    ):
+        """Test change-password response does not expose sensitive fields."""
+        token = create_token(master_admin_account)
+        response = client.patch(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": master_admin_account["password"],
+                "new_password": "NewPassword123!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        # Security contract: response should only carry operation-level info.
+        sensitive_fields = {"password_hash", "curp", "rfc"}
+        assert sensitive_fields.isdisjoint(data.keys())
 
     def test_change_password_user_account(
         self, client: TestClient, user_account: dict

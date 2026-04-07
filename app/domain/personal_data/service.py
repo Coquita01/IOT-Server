@@ -4,7 +4,6 @@ from uuid import UUID
 from sqlmodel import Session
 
 from app.database.model import PersonalData
-from app.domain.auth.security import get_password_hash
 from app.domain.personal_data.non_critical_personal_data_service import (
     NonCriticalPersonalDataService,
 )
@@ -25,17 +24,8 @@ class PersonalDataService(
         )
         self.sensitive_data_service = SensitiveDataService(session)
 
-    def _hash_password_if_needed(
-        self, payload: PersonalDataCreate | PersonalDataUpdate
-    ) -> None:
-        password_hash = getattr(payload, "password_hash", None)
-        if password_hash and not str(password_hash).startswith("$2"):
-            payload.password_hash = get_password_hash(password_hash)
-
     @override
     def create_entity(self, payload: PersonalDataCreate) -> T:
-        self._hash_password_if_needed(payload)
-
         non_critical_personal_data = (
             self.non_critical_personal_data_service.create_entity(payload)
         )
@@ -48,7 +38,6 @@ class PersonalDataService(
 
     @override
     def update_entity(self, id: UUID, payload: PersonalDataUpdate) -> T:
-        self._hash_password_if_needed(payload)
         entity = self.get_by_id(id)
 
         self.non_critical_personal_data_service.update_entity(

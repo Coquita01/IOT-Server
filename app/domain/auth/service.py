@@ -16,7 +16,6 @@ from app.domain.auth.schemas import (
 )
 from app.domain.auth.security import (
     create_access_token,
-    get_password_hash,
     verify_password,
 )
 from app.shared.exceptions import BadRequestException
@@ -100,7 +99,7 @@ class AuthService:
         if not verify_password(payload.current_password, sensitive_data.password_hash):
             raise BadRequestException("Current password is incorrect")
 
-        sensitive_data.password_hash = get_password_hash(payload.new_password)
+        sensitive_data.password = payload.new_password
         self.session.add(sensitive_data)
         self.session.commit()
         self.session.refresh(sensitive_data)

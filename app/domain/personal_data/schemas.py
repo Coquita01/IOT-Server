@@ -59,7 +59,7 @@ class SensitiveDataCreate(BaseModel):
 
     non_critical_data_id: UUID | None = None
     email: str = Field(min_length=6, max_length=254)
-    password_hash: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
     curp: str = Field(pattern=r"^[A-Z0-9]{18}$")
     rfc: str = Field(pattern=r"^[A-Z0-9]{12,13}$")
 
@@ -82,7 +82,7 @@ class SensitiveDataUpdate(BaseModel):
 
     non_critical_data_id: UUID | None = None
     email: str | None = Field(default=None, min_length=6, max_length=254)
-    password_hash: str | None = Field(default=None, min_length=8, max_length=128)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
     curp: str | None = Field(default=None, pattern=r"^[A-Z0-9]{18}$")
     rfc: str | None = Field(default=None, pattern=r"^[A-Z0-9]{12,13}$")
 

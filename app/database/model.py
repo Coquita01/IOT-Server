@@ -5,6 +5,7 @@ from app.shared.base_domain.model import BaseTable
 from datetime import datetime
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 from app.database.format import UserPlainAttribute
+from app.domain.auth.security import get_password_hash
 
 
 class NonCriticalPersonalData(BaseTable, table=True):
@@ -53,6 +54,16 @@ class SensitiveData(BaseTable, table=True):
         back_populates="sensitive_data",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+
+    @property
+    def password(self) -> str:
+        raise AttributeError("password is write-only")
+
+    @password.setter
+    def password(self, plain_password: str) -> None:
+        if plain_password.startswith("$2"):
+            raise ValueError("password must be provided in plain text")
+        self.password_hash = get_password_hash(plain_password)
 
 
 class PersonalData(BaseTable, UserPlainAttribute):

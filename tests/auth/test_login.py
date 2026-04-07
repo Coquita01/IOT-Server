@@ -209,3 +209,76 @@ class TestLogin:
             },
         )
         assert response.status_code == 200
+
+    def test_login_missing_password_returns_422(self, client: TestClient):
+        """Test login rejects payloads without password."""
+        response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "valid@example.com",
+            },
+        )
+        assert response.status_code == 422
+
+    def test_login_missing_email_returns_422(self, client: TestClient):
+        """Test login rejects payloads without email."""
+        response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "password": "ValidPass123!",
+            },
+        )
+        assert response.status_code == 422
+
+    def test_login_empty_json_returns_422(self, client: TestClient):
+        """Test login rejects empty JSON payloads."""
+        response = client.post(
+            "/api/v1/auth/login",
+            json={},
+        )
+        assert response.status_code == 422
+
+    def test_login_response_does_not_expose_sensitive_fields(
+        self, client: TestClient, master_admin_account: dict
+    ):
+        """Test login response does not expose sensitive fields."""
+        response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": master_admin_account["email"],
+                "password": master_admin_account["password"],
+            },
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        # Security contract: auth responses must not leak personal/sensitive internals.
+        sensitive_fields = {"password_hash", "curp", "rfc"}
+        assert sensitive_fields.isdisjoint(data.keys())
+
+    def test_login_error_message_is_generic_for_wrong_email_and_wrong_password(
+        self, client: TestClient, master_admin_account: dict
+    ):
+        """Test auth errors are generic to prevent account enumeration."""
+        response_email_not_found = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "nonexistent@test.com",
+                "password": "SomePassword123!",
+            },
+        )
+        response_wrong_password = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": master_admin_account["email"],
+                "password": "WrongPassword123!",
+            },
+        )
+
+        assert response_email_not_found.status_code == 400
+        assert response_wrong_password.status_code == 400
+        # Both failures should expose the same detail.
+        assert (
+            response_email_not_found.json()["detail"]
+            == response_wrong_password.json()["detail"]
+        )

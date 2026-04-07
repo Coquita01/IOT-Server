@@ -86,6 +86,23 @@ class TestUserList:
         assert data["limit"] == 10
         assert data["offset"] == 0
 
+    def test_list_users_items_do_not_expose_sensitive_fields(
+        self, client: TestClient, master_admin_account: dict
+    ):
+        """Test list endpoint does not expose sensitive fields in items."""
+        token = create_token(master_admin_account)
+        response = client.get(
+            "/api/v1/users",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        items = response.json().get("data", [])
+        sensitive_fields = {"password_hash", "curp", "rfc"}
+        for item in items:
+            # List payload must not leak sensitive identity fields.
+            assert sensitive_fields.isdisjoint(item.keys())
+
 
 class TestUserRetrieve:
     """Test GET /users/{id} endpoint."""
@@ -149,6 +166,21 @@ class TestUserRetrieve:
         )
         assert response.status_code == 403
 
+    def test_retrieve_user_response_does_not_expose_sensitive_fields(
+        self, client: TestClient, master_admin_account: dict, user_account: dict
+    ):
+        """Test retrieve endpoint does not expose sensitive fields."""
+        token = create_token(master_admin_account)
+        response = client.get(
+            f"/api/v1/users/{user_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        sensitive_fields = {"password_hash", "curp", "rfc"}
+        assert sensitive_fields.isdisjoint(data.keys())
+
 
 class TestUserCreate:
     """Test POST /users endpoint."""
@@ -169,7 +201,7 @@ class TestUserCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "new_user@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "NEWU111111HDFRRL09",
             "rfc": "NEWU111111AB0",
         }
@@ -200,7 +232,7 @@ class TestUserCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "test@example.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "ABCD111111HDFRRL09",
             "rfc": "ABCD111111AB0",
         }
@@ -228,7 +260,7 @@ class TestUserCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": user_account["email"],
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "DUPU111111HDFRRL09",
             "rfc": "DUPU111111AB0",
         }
@@ -255,7 +287,7 @@ class TestUserCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "test@example.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "MISS111111HDFRRL09",
             "rfc": "MISS111111AB0",
         }
@@ -283,7 +315,7 @@ class TestUserCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "user_phone@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "PHNU111111HDFRRL09",
             "rfc": "PHNU111111AB0",
         }
@@ -311,7 +343,7 @@ class TestUserCreate:
             "postal_code": "12",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "user_postal@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "POSU111111HDFRRL09",
             "rfc": "POSU111111AB0",
         }
@@ -339,7 +371,7 @@ class TestUserCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "user_curp@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "SHORT",
             "rfc": "CURPU111111AB0",
         }
@@ -367,7 +399,7 @@ class TestUserCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "user_rfc@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "CUFU111111HDFRRL09",
             "rfc": "X",
         }
@@ -396,7 +428,7 @@ class TestUserCreate:
             "postal_code": "06500",
             "birth_date": future_date,
             "email": "user_birth@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "FUTU111111HDFRRL09",
             "rfc": "FUTU111111AB0",
         }
@@ -424,7 +456,7 @@ class TestUserCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "test@example.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "ABCD111111HDFRRL09",
             "rfc": "ABCD111111AB0",
         }
@@ -457,7 +489,7 @@ class TestUserUpdate:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["first_name"] == "John"
+        assert data["first_name"] == "UpdatedJohn"
 
     def test_update_user_partial(
         self, client: TestClient, master_admin_account: dict, user_account: dict
@@ -472,7 +504,7 @@ class TestUserUpdate:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["first_name"] == "John"
+        assert data["first_name"] == "PartialJohn"
 
     def test_update_user_not_found(
         self, client: TestClient, master_admin_account: dict
@@ -513,7 +545,7 @@ class TestUserUpdate:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["is_active"] is True
+        assert data["is_active"] is False
 
     def test_update_user_as_manager_forbidden(
         self, client: TestClient, manager_account: dict, user_account: dict
@@ -540,6 +572,73 @@ class TestUserUpdate:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 403
+
+    def test_update_user_partial_is_atomic_for_first_name(
+        self, client: TestClient, master_admin_account: dict, user_account: dict
+    ):
+        """Test first_name patch updates only that field and keeps others intact."""
+        token = create_token(master_admin_account)
+
+        before_response = client.get(
+            f"/api/v1/users/{user_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert before_response.status_code == 200
+        before_data = before_response.json()
+
+        patch_response = client.patch(
+            f"/api/v1/users/{user_account['id']}",
+            json={"first_name": "AtomicUserName"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert patch_response.status_code == 200
+
+        after_response = client.get(
+            f"/api/v1/users/{user_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert after_response.status_code == 200
+        after_data = after_response.json()
+
+        assert after_data["first_name"] == "AtomicUserName"
+        assert after_data["last_name"] == before_data["last_name"]
+        # Some response schemas do not expose phone; verify it only when present.
+        if "phone" in before_data and "phone" in after_data:
+            assert after_data["phone"] == before_data["phone"]
+
+    def test_update_user_partial_is_atomic_for_is_active(
+        self, client: TestClient, master_admin_account: dict, user_account: dict
+    ):
+        """Test is_active patch updates only status and keeps identity fields intact."""
+        token = create_token(master_admin_account)
+
+        before_response = client.get(
+            f"/api/v1/users/{user_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert before_response.status_code == 200
+        before_data = before_response.json()
+
+        patch_response = client.patch(
+            f"/api/v1/users/{user_account['id']}",
+            json={"is_active": False},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert patch_response.status_code == 200
+
+        after_response = client.get(
+            f"/api/v1/users/{user_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert after_response.status_code == 200
+        after_data = after_response.json()
+
+        assert after_data["is_active"] is False
+        assert after_data["first_name"] == before_data["first_name"]
+        assert after_data["last_name"] == before_data["last_name"]
+        # Some response schemas do not expose phone; verify it only when present.
+        if "phone" in before_data and "phone" in after_data:
+            assert after_data["phone"] == before_data["phone"]
 
 
 class TestUserDelete:

@@ -328,7 +328,7 @@ def get_valid_personal_data() -> dict:
         "postal_code": "06500",
         "birth_date": datetime(1990, 6, 15).isoformat(),
         "email": "test@example.com",
-        "password_hash": "TestPass123!",
+        "password": "TestPass123!",
         "curp": "ABCD111111HDFRRL09",
         "rfc": "ABCD111111AB0",
     }
