@@ -9,6 +9,7 @@ from app.domain.device.controller import device_router
 from app.domain.user.controller import user_router
 from app.domain.administrator.controller import administrator_router
 from app.domain.manager.controller import manager_router
+from app.domain.ecosystem_ticket.controller import ecosystem_ticket_router
 from app.shared.middleware.auth.human import Human
 
 
@@ -34,4 +35,5 @@ app.include_router(device_router, prefix=api_version_v1_prefix)
 app.include_router(administrator_router, prefix=api_version_v1_prefix)
 app.include_router(user_router, prefix=api_version_v1_prefix)
 app.include_router(manager_router, prefix=api_version_v1_prefix)
+app.include_router(ecosystem_ticket_router, prefix=api_version_v1_prefix)
 
