@@ -1,29 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
-import jwt
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from uuid import uuid4
 
-from app.config import settings
-
-
-def create_token(account_data: dict) -> str:
-    """Create a valid JWT token for testing."""
-    to_encode = {
-        "sub": str(account_data["id"]),
-        "email": account_data["email"],
-        "type": account_data["account_type"],
-        "is_master": account_data["is_master"],
-    }
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
-    to_encode.update({"exp": expire})
-    return jwt.encode(
-        to_encode,
-        settings.SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
-    )
+from tests.conftest import create_test_token
 
 
 class TestManagerList:
@@ -33,7 +13,7 @@ class TestManagerList:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test listing managers as master admin."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         response = client.get(
             "/api/v1/managers",
             headers={"Authorization": f"Bearer {token}"},
@@ -48,7 +28,7 @@ class TestManagerList:
         self, client: TestClient, regular_admin_account: dict
     ):
         """Test listing managers as regular admin."""
-        token = create_token(regular_admin_account)
+        token = create_test_token(regular_admin_account)
         response = client.get(
             "/api/v1/managers",
             headers={"Authorization": f"Bearer {token}"},
@@ -62,7 +42,7 @@ class TestManagerList:
         self, client: TestClient, manager_account: dict
     ):
         """Test listing managers as manager."""
-        token = create_token(manager_account)
+        token = create_test_token(manager_account)
         response = client.get(
             "/api/v1/managers",
             headers={"Authorization": f"Bearer {token}"},
@@ -76,7 +56,7 @@ class TestManagerList:
         self, client: TestClient, user_account: dict
     ):
         """Test listing managers as user (forbidden)."""
-        token = create_token(user_account)
+        token = create_test_token(user_account)
         response = client.get(
             "/api/v1/managers",
             headers={"Authorization": f"Bearer {token}"},
@@ -92,7 +72,7 @@ class TestManagerList:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test listing managers with pagination parameters."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         response = client.get(
             "/api/v1/managers?offset=0&limit=10",
             headers={"Authorization": f"Bearer {token}"},
@@ -110,7 +90,7 @@ class TestManagerRetrieve:
         self, client: TestClient, master_admin_account: dict, manager_account: dict
     ):
         """Test retrieving a manager as master admin."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         response = client.get(
             f"/api/v1/managers/{manager_account['id']}",
             headers={"Authorization": f"Bearer {token}"},
@@ -124,7 +104,7 @@ class TestManagerRetrieve:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test retrieving a non-existent manager."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         response = client.get(
             f"/api/v1/managers/{uuid4()}",
             headers={"Authorization": f"Bearer {token}"},
@@ -135,7 +115,7 @@ class TestManagerRetrieve:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test retrieving manager with invalid UUID."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         response = client.get(
             "/api/v1/managers/not-a-uuid",
             headers={"Authorization": f"Bearer {token}"},
@@ -146,7 +126,7 @@ class TestManagerRetrieve:
         self, client: TestClient, manager_account: dict
     ):
         """Test retrieving manager as manager (read-only)."""
-        token = create_token(manager_account)
+        token = create_test_token(manager_account)
         response = client.get(
             f"/api/v1/managers/{manager_account['id']}",
             headers={"Authorization": f"Bearer {token}"},
@@ -157,7 +137,7 @@ class TestManagerRetrieve:
         self, client: TestClient, user_account: dict, manager_account: dict
     ):
         """Test retrieving manager as user (forbidden)."""
-        token = create_token(user_account)
+        token = create_test_token(user_account)
         response = client.get(
             f"/api/v1/managers/{manager_account['id']}",
             headers={"Authorization": f"Bearer {token}"},
@@ -172,7 +152,7 @@ class TestManagerCreate:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test creating a new manager as master admin."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         manager_data = {
             "first_name": "Test",
             "last_name": "Manager",
@@ -184,7 +164,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "new_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "TMAN111111HDFRRL09",
             "rfc": "TMAN111111AB0",
         }
@@ -203,7 +183,7 @@ class TestManagerCreate:
         self, client: TestClient, regular_admin_account: dict
     ):
         """Test creating manager as regular admin."""
-        token = create_token(regular_admin_account)
+        token = create_test_token(regular_admin_account)
         manager_data = {
             "first_name": "Admin",
             "last_name": "Manager",
@@ -215,7 +195,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "admin_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "AMAN111111HDFRRL09",
             "rfc": "AMAN111111AB0",
         }
@@ -231,7 +211,7 @@ class TestManagerCreate:
         self, client: TestClient, manager_account: dict
     ):
         """Test creating manager as manager (forbidden - read-only)."""
-        token = create_token(manager_account)
+        token = create_test_token(manager_account)
         manager_data = {
             "first_name": "Forbidden",
             "last_name": "Manager",
@@ -243,7 +223,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "forbidden_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "FMAN111111HDFRRL09",
             "rfc": "FMAN111111AB0",
         }
@@ -259,7 +239,7 @@ class TestManagerCreate:
         self, client: TestClient, user_account: dict
     ):
         """Test creating manager as user (forbidden)."""
-        token = create_token(user_account)
+        token = create_test_token(user_account)
         manager_data = {
             "first_name": "User",
             "last_name": "Manager",
@@ -271,7 +251,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "user_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "UMAN111111HDFRRL09",
             "rfc": "UMAN111111AB0",
         }
@@ -287,7 +267,7 @@ class TestManagerCreate:
         self, client: TestClient, master_admin_account: dict, manager_account: dict
     ):
         """Test creating manager with duplicate email."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         manager_data = {
             "first_name": "Duplicate",
             "last_name": "Manager",
@@ -299,7 +279,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": manager_account["email"],
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "DMAN111111HDFRRL09",
             "rfc": "DMAN111111AB0",
         }
@@ -315,7 +295,7 @@ class TestManagerCreate:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test creating manager with missing required field."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         manager_data = {
             "last_name": "Manager",
             "second_last_name": "Name",
@@ -326,7 +306,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "missing@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "MMAN111111HDFRRL09",
             "rfc": "MMAN111111AB0",
         }
@@ -342,7 +322,7 @@ class TestManagerCreate:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test creating manager with invalid phone format."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         manager_data = {
             "first_name": "Phone",
             "last_name": "Manager",
@@ -354,7 +334,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "phone_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "PMAN111111HDFRRL09",
             "rfc": "PMAN111111AB0",
         }
@@ -370,7 +350,7 @@ class TestManagerCreate:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test creating manager with invalid CURP."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         manager_data = {
             "first_name": "Curp",
             "last_name": "Manager",
@@ -382,7 +362,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "curp_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "INVALID",
             "rfc": "CMAN111111AB0",
         }
@@ -402,7 +382,7 @@ class TestManagerUpdate:
         self, client: TestClient, master_admin_account: dict, manager_account: dict
     ):
         """Test updating manager with partial fields as master admin."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
 
         response = client.patch(
             f"/api/v1/managers/{manager_account['id']}",
@@ -423,7 +403,7 @@ class TestManagerUpdate:
         self, client: TestClient, regular_admin_account: dict, manager_account: dict
     ):
         """Test updating multiple manager fields as admin."""
-        token = create_token(regular_admin_account)
+        token = create_test_token(regular_admin_account)
 
         response = client.patch(
             f"/api/v1/managers/{manager_account['id']}",
@@ -448,7 +428,7 @@ class TestManagerUpdate:
         self, client: TestClient, master_admin_account: dict, manager_account: dict
     ):
         """Test deactivating a manager."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
 
         response = client.patch(
             f"/api/v1/managers/{manager_account['id']}",
@@ -476,7 +456,7 @@ class TestManagerUpdate:
     ):
         """Test updating manager as manager (forbidden - read-only)."""
         # Create another manager to update
-        admin_token = create_token(master_admin_account)
+        admin_token = create_test_token(master_admin_account)
         manager_data = {
             "first_name": "Target",
             "last_name": "Manager",
@@ -488,7 +468,7 @@ class TestManagerUpdate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "target_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "TRGT111111HDFRRL09",
             "rfc": "TRGT111111AB0",
         }
@@ -500,7 +480,7 @@ class TestManagerUpdate:
         target_id = create_response.json()["id"]
 
         # Try to update as manager
-        manager_token = create_token(manager_account)
+        manager_token = create_test_token(manager_account)
         response = client.patch(
             f"/api/v1/managers/{target_id}",
             json={"first_name": "Forbidden"},
@@ -512,7 +492,7 @@ class TestManagerUpdate:
         self, client: TestClient, user_account: dict, manager_account: dict
     ):
         """Test updating manager as user (forbidden)."""
-        token = create_token(user_account)
+        token = create_test_token(user_account)
         response = client.patch(
             f"/api/v1/managers/{manager_account['id']}",
             json={"first_name": "Forbidden"},
@@ -524,7 +504,7 @@ class TestManagerUpdate:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test updating non-existent manager."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         response = client.patch(
             f"/api/v1/managers/{uuid4()}",
             json={"first_name": "Not Found"},
@@ -540,7 +520,7 @@ class TestManagerDelete:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test deleting manager as master admin."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
 
         # Create manager
         manager_data = {
@@ -554,7 +534,7 @@ class TestManagerDelete:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "delete_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "DELM111111HDFRRL09",
             "rfc": "DELM111111AB0",
         }
@@ -583,7 +563,7 @@ class TestManagerDelete:
         self, client: TestClient, regular_admin_account: dict
     ):
         """Test deleting manager as regular admin."""
-        token = create_token(regular_admin_account)
+        token = create_test_token(regular_admin_account)
 
         # Create manager
         manager_data = {
@@ -597,7 +577,7 @@ class TestManagerDelete:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "admin_delete_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "ADLM111111HDFRRL09",
             "rfc": "ADLM111111AB0",
         }
@@ -620,7 +600,7 @@ class TestManagerDelete:
     ):
         """Test deleting manager as manager (forbidden - read-only)."""
         # Create manager as admin
-        admin_token = create_token(master_admin_account)
+        admin_token = create_test_token(master_admin_account)
         manager_data = {
             "first_name": "ManagerDelete",
             "last_name": "Manager",
@@ -632,7 +612,7 @@ class TestManagerDelete:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "manager_delete@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "MDLM111111HDFRRL09",
             "rfc": "MDLM111111AB0",
         }
@@ -644,7 +624,7 @@ class TestManagerDelete:
         manager_id = create_response.json()["id"]
 
         # Try to delete as manager
-        manager_token = create_token(manager_account)
+        manager_token = create_test_token(manager_account)
         response = client.delete(
             f"/api/v1/managers/{manager_id}",
             headers={"Authorization": f"Bearer {manager_token}"},
@@ -655,7 +635,7 @@ class TestManagerDelete:
         self, client: TestClient, user_account: dict, manager_account: dict
     ):
         """Test deleting manager as user (forbidden)."""
-        token = create_token(user_account)
+        token = create_test_token(user_account)
         response = client.delete(
             f"/api/v1/managers/{manager_account['id']}",
             headers={"Authorization": f"Bearer {token}"},
@@ -666,7 +646,7 @@ class TestManagerDelete:
         self, client: TestClient, master_admin_account: dict
     ):
         """Test deleting non-existent manager."""
-        token = create_token(master_admin_account)
+        token = create_test_token(master_admin_account)
         response = client.delete(
             f"/api/v1/managers/{uuid4()}",
             headers={"Authorization": f"Bearer {token}"},

@@ -12,18 +12,21 @@ from app.domain.auth.schemas import (
     ChangePasswordRequest,
     LoginRequest,
     MessageResponse,
+    RefreshTokenRequest,
     TokenResponse,
 )
 from app.domain.auth.security import (
     create_access_token,
+    decode_access_token,
     verify_password,
 )
 from app.shared.exceptions import BadRequestException
+from app.shared.session.service import SessionService
+from app.config import settings
 
 
 AccountType = Literal["administrator", "manager", "user"]
 
-# Solo para Swagger / OpenAPI
 bearer_scheme = HTTPBearer()
 
 
@@ -37,8 +40,10 @@ class CurrentAccount:
 
 
 class AuthService:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, request: Request):
         self.session = session
+        self.request = request
+        self.session_service = SessionService()
 
     def _resolve_account(self, sensitive_data: SensitiveData):
         if sensitive_data.administrator is not None:
@@ -55,14 +60,28 @@ class AuthService:
 
         return None, None, False
 
-    def login(self, payload: LoginRequest) -> TokenResponse:
+    def _get_client_ip(self) -> str:
+        forwarded = self.request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return self.request.client.host if self.request.client else "unknown"
+
+    def _get_user_agent(self) -> str:
+        return self.request.headers.get("User-Agent", "unknown")
+
+    async def login(self, payload: LoginRequest) -> TokenResponse:
+        ip_address = self._get_client_ip()
+        await self.session_service.check_rate_limit(ip_address)
+
         stmt = select(SensitiveData).where(SensitiveData.email == payload.email)
         sensitive_data = self.session.exec(stmt).first()
 
         if sensitive_data is None:
+            await self.session_service.record_failed_login(ip_address)
             raise BadRequestException("Invalid credentials")
 
         if not verify_password(payload.password, sensitive_data.password_hash):
+            await self.session_service.record_failed_login(ip_address)
             raise BadRequestException("Invalid credentials")
 
         account, account_type, is_master = self._resolve_account(sensitive_data)
@@ -72,20 +91,85 @@ class AuthService:
         if not account.is_active:
             raise BadRequestException("Account is inactive")
 
-        token = create_access_token(
+        token_id, refresh_token = await self.session_service.create_session(
+            user_id=str(account.id),
+            email=sensitive_data.email,
+            account_type=account_type,
+            is_master=is_master,
+            ip_address=ip_address,
+            user_agent=self._get_user_agent(),
+        )
+
+        access_token = create_access_token(
             {
                 "sub": str(account.id),
                 "email": sensitive_data.email,
                 "type": account_type,
                 "is_master": is_master,
-            }
+            },
+            token_id=token_id,
         )
 
+        await self.session_service.record_successful_login(ip_address)
+
         return TokenResponse(
-            access_token=token,
+            access_token=access_token,
+            refresh_token=refresh_token,
             account_type=account_type,
             is_master=is_master,
         )
+
+    async def refresh(self, payload: RefreshTokenRequest) -> TokenResponse:
+        user_id = await self.session_service.validate_refresh_token(
+            payload.refresh_token
+        )
+
+        session = await self.session_service.repository.get_session(user_id)
+        
+        if not session:
+            from app.shared.session.exceptions import SessionNotFoundException
+            raise SessionNotFoundException()
+
+        token_id, new_refresh_token = await self.session_service.rotate_refresh_token(
+            user_id=user_id,
+            old_refresh_token=payload.refresh_token,
+            ip_address=self._get_client_ip(),
+            user_agent=self._get_user_agent(),
+        )
+
+        access_token = create_access_token(
+            {
+                "sub": session.user_id,
+                "email": session.email,
+                "type": session.account_type,
+                "is_master": session.is_master,
+            },
+            token_id=token_id,
+        )
+
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=new_refresh_token,
+            account_type=session.account_type,
+            is_master=session.is_master,
+        )
+
+    async def logout(self, current: CurrentAccount, token: str) -> MessageResponse:
+        try:
+            payload = decode_access_token(token)
+            expires_in = int(payload.get("exp", 0)) - int(
+                payload.get("iat", 0)
+            )
+        except Exception:
+            expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+
+        await self.session_service.destroy_session(
+            user_id=str(current.account_id),
+            access_token=token,
+            expires_in=expires_in,
+        )
+
+        return MessageResponse(message="Logout successful")
 
     def change_password(
         self,
@@ -107,8 +191,8 @@ class AuthService:
         return MessageResponse(message="Password updated successfully")
 
 
-def get_auth_service(session: SessionDep) -> AuthService:
-    return AuthService(session)
+def get_auth_service(session: SessionDep, request: Request) -> AuthService:
+    return AuthService(session, request)
 
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]

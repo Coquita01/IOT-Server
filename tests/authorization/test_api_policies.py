@@ -1,29 +1,8 @@
 import pytest
-from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
-import jwt
 from uuid import uuid4
 
-from app.config import settings
-
-
-def create_token(account_data: dict) -> str:
-    """Create a valid JWT token for testing."""
-    to_encode = {
-        "sub": str(account_data["id"]),
-        "email": account_data["email"],
-        "type": account_data["account_type"],
-        "is_master": account_data.get("is_master", False),
-    }
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
-    to_encode.update({"exp": expire})
-    return jwt.encode(
-        to_encode,
-        settings.SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
-    )
+from tests.conftest import create_test_token as create_token
 
 
 class TestDevicePoliciesAPI:

@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
+from unittest.mock import AsyncMock, patch
 
 from app.main import app
 from app.config import settings
@@ -18,6 +19,88 @@ from app.database.model import (
     Manager,
 )
 from app.domain.auth.security import get_password_hash
+
+
+_mock_valkey_instance = None
+
+
+def create_test_token(account_data: dict) -> str:
+    from app.domain.auth.security import create_access_token
+    from uuid import uuid4
+    import json
+    from datetime import datetime, timezone
+    
+    token_id = str(uuid4())
+    token = create_access_token(
+        {
+            "sub": str(account_data["id"]),
+            "email": account_data["email"],
+            "type": account_data["account_type"],
+            "is_master": account_data["is_master"],
+        },
+        token_id=token_id
+    )
+    
+    session_data = {
+        "user_id": str(account_data["id"]),
+        "token_id": token_id,
+        "refresh_token": "test_refresh_token",
+        "email": account_data["email"],
+        "account_type": account_data["account_type"],
+        "is_master": account_data["is_master"],
+        "ip_address": "127.0.0.1",
+        "user_agent": "test",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_activity": datetime.now(timezone.utc).isoformat(),
+    }
+    
+    global _mock_valkey_instance
+    if _mock_valkey_instance is not None:
+        _mock_valkey_instance.data[f"session:user:{account_data['id']}"] = json.dumps(session_data)
+    
+    return token
+
+
+class MockValkey:
+    def __init__(self):
+        self.data = {}
+        self.expirations = {}
+
+    async def setex(self, key: str, ttl: int, value: str):
+        self.data[key] = value
+        self.expirations[key] = ttl
+
+    async def get(self, key: str):
+        return self.data.get(key)
+
+    async def delete(self, *keys: str):
+        for key in keys:
+            self.data.pop(key, None)
+            self.expirations.pop(key, None)
+
+    async def exists(self, key: str):
+        return 1 if key in self.data else 0
+
+    async def incr(self, key: str):
+        current = int(self.data.get(key, "0"))
+        self.data[key] = str(current + 1)
+        return current + 1
+
+    async def expire(self, key: str, ttl: int):
+        self.expirations[key] = ttl
+
+    async def aclose(self):
+        pass
+
+
+@pytest.fixture(autouse=True)
+def mock_valkey():
+    global _mock_valkey_instance
+    mock = MockValkey()
+    _mock_valkey_instance = mock
+    with patch("app.shared.session.repository.redis.Redis", return_value=mock):
+        yield mock
+    _mock_valkey_instance = None
 
 
 @pytest.fixture(scope="session", autouse=True)

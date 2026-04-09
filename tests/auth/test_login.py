@@ -1,10 +1,9 @@
-import jwt
 import pytest
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from app.config import settings
-from app.domain.auth.security import get_password_hash, verify_password
+from app.domain.auth.security import get_password_hash, verify_password, decode_access_token
 
 
 class TestLogin:
@@ -24,18 +23,15 @@ class TestLogin:
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
+        assert "refresh_token" in data
         assert data["token_type"] == "bearer"
         assert data["account_type"] == "administrator"
         assert data["is_master"] is True
 
-        # Verify token is valid JWT
-        decoded = jwt.decode(
-            data["access_token"],
-            settings.SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
-        )
+        decoded = decode_access_token(data["access_token"])
         assert decoded["email"] == master_admin_account["email"]
         assert decoded["is_master"] is True
+        assert "jti" in decoded
 
     def test_login_successful_regular_admin(
         self, client: TestClient, regular_admin_account: dict
@@ -50,6 +46,7 @@ class TestLogin:
         )
         assert response.status_code == 200
         data = response.json()
+        assert "refresh_token" in data
         assert data["account_type"] == "administrator"
         assert data["is_master"] is False
 
@@ -64,6 +61,7 @@ class TestLogin:
         )
         assert response.status_code == 200
         data = response.json()
+        assert "refresh_token" in data
         assert data["account_type"] == "user"
         assert data["is_master"] is False
 
@@ -80,6 +78,7 @@ class TestLogin:
         )
         assert response.status_code == 200
         data = response.json()
+        assert "refresh_token" in data
         assert data["account_type"] == "manager"
         assert data["is_master"] is False
 
