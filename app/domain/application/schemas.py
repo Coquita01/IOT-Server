@@ -33,3 +33,12 @@ class ApplicationResponse(BaseSchemaResponse):
     administrator_id: UUID
     api_key: str
     is_active: bool 
+
+class PuzzlePayload(BaseModel):
+    ciphertext: str
+    iv: str
+
+
+class PuzzleRequest(BaseModel):
+    application_id: UUID
+    encrypted_payload: PuzzlePayload
