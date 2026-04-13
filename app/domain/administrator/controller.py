@@ -23,3 +23,8 @@ class AdministratorController(FullCrudApiController):
 
 
 administrator_router = AdministratorController().router
+
+# Administrator login endpoint
+from app.shared.auth.controller import AuthApiController
+administrator_auth_controller = AuthApiController("admin", "/administrators/login")
+administrator_login_router = administrator_auth_controller.router

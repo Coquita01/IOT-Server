@@ -10,9 +10,7 @@ from app.database import SessionDep
 from app.database.model import SensitiveData
 from app.domain.auth.schemas import (
     ChangePasswordRequest,
-    LoginRequest,
     MessageResponse,
-    TokenResponse,
 )
 from app.domain.auth.security import (
     create_access_token,
@@ -55,37 +53,6 @@ class AuthService:
 
         return None, None, False
 
-    def login(self, payload: LoginRequest) -> TokenResponse:
-        stmt = select(SensitiveData).where(SensitiveData.email == payload.email)
-        sensitive_data = self.session.exec(stmt).first()
-
-        if sensitive_data is None:
-            raise BadRequestException("Invalid credentials")
-
-        if not verify_password(payload.password, sensitive_data.password_hash):
-            raise BadRequestException("Invalid credentials")
-
-        account, account_type, is_master = self._resolve_account(sensitive_data)
-        if account is None or account_type is None:
-            raise BadRequestException("Account has no associated profile")
-
-        if not account.is_active:
-            raise BadRequestException("Account is inactive")
-
-        token = create_access_token(
-            {
-                "sub": str(account.id),
-                "email": sensitive_data.email,
-                "type": account_type,
-                "is_master": is_master,
-            }
-        )
-
-        return TokenResponse(
-            access_token=token,
-            account_type=account_type,
-            is_master=is_master,
-        )
 
     def change_password(
         self,
@@ -95,6 +62,15 @@ class AuthService:
         sensitive_data = self.session.get(SensitiveData, current.sensitive_data_id)
         if sensitive_data is None:
             raise BadRequestException("Associated account was not found")
+
+        # Verificar si la cuenta está activa
+        account, account_type, _ = self._resolve_account(sensitive_data)
+        if account is None or not getattr(account, "is_active", True):
+            from fastapi import HTTPException, status
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account is inactive",
+            )
 
         if not verify_password(payload.current_password, sensitive_data.password_hash):
             raise BadRequestException("Current password is incorrect")

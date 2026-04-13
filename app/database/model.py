@@ -226,12 +226,17 @@ class Device(BaseTable, table=True):
     serial_number: str | None = Field(default=None, unique=True)
     ip: str | None = None
     mac: str | None = Field(default=None, unique=True)
+    encryption_key: str = Field(default_factory=lambda: secrets.token_hex(32))
     is_active: bool = Field(default=True)
 
     device_services: list["DeviceService"] = Relationship(
         back_populates="device",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+
+
+def get_encryption_key():
+    return secrets.token_hex(32)
 
 
 class DeviceService(BaseTable, table=True):

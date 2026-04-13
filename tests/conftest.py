@@ -1,3 +1,36 @@
+import sys
+import types
+import pytest
+from unittest.mock import patch
+
+
+class FakeSessionService:
+    """Fake SessionService that avoids Redis/Valkey connections in tests."""
+    def __init__(self, *args, **kwargs):
+        pass
+    async def get_session(self, user_id):
+        return None  # No active session
+    async def create_session_with_tokens(self, user_id, claims, request_info=None):
+        from app.domain.auth.security import create_access_token
+        token = create_access_token(claims)
+        class Tokens:
+            access_token = token
+            refresh_token = "fake-refresh"
+            token_type = "bearer"
+        return Tokens()
+
+
+@pytest.fixture(autouse=True)
+def mock_session_service():
+    """Mock SessionService in all modules that import it."""
+    import app.shared.auth.service as auth_service_mod
+    import app.shared.session.service as session_service_mod
+
+    with patch.object(auth_service_mod, "SessionService", FakeSessionService), \
+         patch.object(session_service_mod, "SessionService", FakeSessionService):
+        yield
+
+
 import pytest
 import tempfile
 import os
@@ -9,7 +42,7 @@ from app.main import app
 from app.config import settings
 from app.database import SessionDep, get_session
 import app.database as database_module
-import app.shared.middleware.auth.human as human_middleware
+import app.shared.middleware.auth.human.human as human_middleware
 from app.database.model import (
     NonCriticalPersonalData,
     SensitiveData,

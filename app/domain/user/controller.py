@@ -23,3 +23,8 @@ class UserController(FullCrudApiController):
 
 
 user_router = UserController().router
+
+# User login endpoint
+from app.shared.auth.controller import AuthApiController
+user_auth_controller = AuthApiController("user", "/users/login")
+user_login_router = user_auth_controller.router

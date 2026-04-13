@@ -22,3 +22,8 @@ class ManagerController(FullCrudApiController):
 
 
 manager_router = ManagerController().router
+
+# Endpoint de login de manager
+from app.shared.auth.controller import AuthApiController
+manager_auth_controller = AuthApiController("master", "/managers/login")
+manager_login_router = manager_auth_controller.router

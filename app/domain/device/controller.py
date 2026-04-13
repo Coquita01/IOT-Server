@@ -22,3 +22,8 @@ class DeviceController(FullCrudApiController):
 
 
 device_router = DeviceController().router
+
+# Device login endpoint
+from app.shared.auth.controller import AuthApiController
+device_auth_controller = AuthApiController("device", "/devices/login")
+device_login_router = device_auth_controller.router
