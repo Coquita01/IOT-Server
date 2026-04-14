@@ -3,7 +3,6 @@ from uuid import UUID
 
 class LoginRequest(BaseModel):
     entity: str  # user, admin, master, device
-    identifier: str  # username, email, or device_id
     payload: dict
 
 class LoginResponse(BaseModel):

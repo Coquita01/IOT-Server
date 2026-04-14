@@ -5,7 +5,7 @@ from app.shared.middleware.auth.human.human import HumanCryptoManager
 from app.shared.auth.schemas import LoginRequest
 from app.database.model import Device, User
 from app.domain.device.schemas import PuzzleRequest as DevicePuzzleRequest
-from app.domain.user.schemas import PuzzleRequest as UserPuzzleRequest
+from app.shared.middleware.auth.human.puzzle import PuzzleRequest as HumanPuzzleRequest
 from app.shared.session.service import SessionService
 from sqlmodel import Session
 
@@ -21,9 +21,9 @@ class AuthService:
             puzzle = DevicePuzzleRequest(**data.payload)
             manager = CryptoManager(session, session_service)
             return await manager.authenticate(puzzle, request_info={"ip": request.client.host})
-        elif entity in ("user", "admin", "master"):
-            puzzle = UserPuzzleRequest(**data.payload)
+        elif entity in ("user", "admin", "administrator", "manager", "master"):
+            puzzle = HumanPuzzleRequest(**data.payload)
             manager = HumanCryptoManager(session, session_service)
-            return await manager.authenticate(puzzle, request_info={"ip": request.client.host})
+            return await manager.authenticate(puzzle, request_info={"ip": request.client.host}, entity=entity)
         else:
             return {"valid": False, "error": "Unsupported entity"}

@@ -98,16 +98,23 @@ class HumanCryptoManager:
         unpadder = padding.PKCS7(128).unpadder()
         return unpadder.update(padded) + unpadder.finalize()
 
-    async def authenticate(self, puzzle: PuzzleRequest, request_info: dict):
-        # 1. Find user
-        user = self.session.get(User, puzzle.device_id)
-        if not user:
-            logger.warning(f"Puzzle failed: user {puzzle.device_id} not found")
+    async def authenticate(self, puzzle: PuzzleRequest, request_info: dict, entity: str = "user"):
+        # Seleccionar el modelo según entity
+        model_map = {
+            "user": User,
+            "admin": Administrator,
+            "administrator": Administrator,
+            "manager": Manager,
+        }
+        model = model_map.get(entity, User)
+        account = self.session.get(model, puzzle.device_id)
+        if not account:
+            logger.warning(f"Puzzle failed: {entity} {puzzle.device_id} not found")
             return {"valid": False, "error": "Authentication failed"}
 
         # 2. Check if active
-        if not getattr(user, "is_active", True):
-            logger.warning(f"Puzzle failed: user {puzzle.device_id} inactive")
+        if not getattr(account, "is_active", True):
+            logger.warning(f"Puzzle failed: {entity} {puzzle.device_id} inactive")
             return {"valid": False, "error": "Authentication failed"}
 
         # 3. Active session
@@ -115,22 +122,23 @@ class HumanCryptoManager:
         if session:
             return {"valid": False, "error": "Authentication failed"}
 
-        # 4. Get user_key
-        user_key = self._get_user_key(user)
-        if not user_key:
-            logger.warning(f"Puzzle failed: user {puzzle.device_id} no password_hash")
+        # 4. Get user_key (usa la relación sensitive_data)
+        sensitive = getattr(account, "sensitive_data", None)
+        if not sensitive or not sensitive.password_hash:
+            logger.warning(f"Puzzle failed: {entity} {puzzle.device_id} no password_hash")
             return {"valid": False, "error": "Authentication failed"}
+        user_key = bytes.fromhex(sensitive.password_hash[:64])
 
         # 5. Decrypt payload
         try:
             decrypted = self._decrypt_payload(puzzle.encrypted_payload, user_key)
         except Exception:
-            logger.warning(f"Puzzle failed for user {puzzle.device_id}: decryption failed")
+            logger.warning(f"Puzzle failed for {entity} {puzzle.device_id}: decryption failed")
             return {"valid": False, "error": "Authentication failed"}
 
         # 6. Split components: P2 (32) + R2 (32) + timestamp (8) = 72 bytes
         if len(decrypted) < 72:
-            logger.warning(f"Puzzle failed for user {puzzle.device_id}: invalid payload length")
+            logger.warning(f"Puzzle failed for {entity} {puzzle.device_id}: invalid payload length")
             return {"valid": False, "error": "Authentication failed"}
 
         p2_received = decrypted[:32]
@@ -141,7 +149,7 @@ class HumanCryptoManager:
         ts_now = time.time()
         ts_puzzle = int.from_bytes(timestamp_bytes, byteorder="big")
         if abs(ts_puzzle - ts_now) > TIMESTAMP_WINDOW:
-            logger.warning(f"Puzzle failed for user {puzzle.device_id}: timestamp expired")
+            logger.warning(f"Puzzle failed for {entity} {puzzle.device_id}: timestamp expired")
             return {"valid": False, "error": "Authentication failed"}
 
         # 8. Recalculate P2
@@ -154,11 +162,11 @@ class HumanCryptoManager:
         # 9. Compare (timing-safe)
         if hmac.compare_digest(p2_received, p2_expected):
             tokens = await self.session_service.create_session_with_tokens(
-                user_id=str(user.id),
+                user_id=str(account.id),
                 claims={
-                    "sub": str(user.id),
-                    "type": "user",
-                    "name": getattr(user, "name", ""),
+                    "sub": str(account.id),
+                    "type": entity,
+                    "name": getattr(account, "name", ""),
                 },
                 request_info=request_info
             )
@@ -167,8 +175,8 @@ class HumanCryptoManager:
                 "access_token": tokens.access_token,
                 "refresh_token": tokens.refresh_token,
                 "token_type": tokens.token_type,
-                "user_id": str(user.id),
+                "user_id": str(account.id),
             }
         else:
-            logger.warning(f"Puzzle failed for user {puzzle.device_id}: P2 mismatch")
+            logger.warning(f"Puzzle failed for {entity} {puzzle.device_id}: P2 mismatch")
             return {"valid": False, "error": "Authentication failed"}

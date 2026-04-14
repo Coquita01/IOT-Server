@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 
 from app.database.model import Administrator, NonCriticalPersonalData, SensitiveData
+from app.shared.middleware.auth.human.puzzle import PuzzlePayload, PuzzleRequest
 from app.config import settings
 
 API_URL = "/api/v1/administrators/login"
@@ -53,11 +54,10 @@ def _build_puzzle_payload(user_key: bytes, server_key: bytes):
 
 @pytest.fixture
 def admin_in_db(session):
-    """Create admin + user records in the test database."""
+    """Create only admin record in the test database."""
     personal_data = NonCriticalPersonalData(first_name="Admin", last_name="Master")
     session.add(personal_data)
     session.flush()
-    # Store password as SHA-256 hex (the format HumanCryptoManager expects)
     password_hash = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
     sensitive_data = SensitiveData(
         non_critical_data_id=personal_data.id,
@@ -66,18 +66,15 @@ def admin_in_db(session):
     )
     session.add(sensitive_data)
     session.flush()
-    from app.database.model import User
-    user = User(sensitive_data_id=sensitive_data.id, is_active=True)
-    session.add(user)
     admin = Administrator(sensitive_data_id=sensitive_data.id, is_master=True)
     session.add(admin)
     session.commit()
-    return admin, user
+    return admin
 
 
 def test_admin_login_puzzle(client, admin_in_db):
-    admin, user = admin_in_db
-    device_id = str(user.id)
+    admin = admin_in_db
+    device_id = str(admin.id)
 
     # Derive same keys used by the backend
     user_key = hashlib.sha256(ADMIN_PASSWORD.encode()).digest()  # 32 bytes
@@ -88,8 +85,7 @@ def test_admin_login_puzzle(client, admin_in_db):
     encrypted_payload = _build_puzzle_payload(user_key, server_key)
 
     login_payload = {
-        "entity": "admin",
-        "identifier": ADMIN_USERNAME,
+        "entity": "administrator",
         "payload": {
             "device_id": device_id,
             "encrypted_payload": encrypted_payload,
