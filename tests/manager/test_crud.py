@@ -184,7 +184,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "new_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "TMAN111111HDFRRL09",
             "rfc": "TMAN111111AB0",
         }
@@ -215,7 +215,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "admin_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "AMAN111111HDFRRL09",
             "rfc": "AMAN111111AB0",
         }
@@ -243,7 +243,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "forbidden_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "FMAN111111HDFRRL09",
             "rfc": "FMAN111111AB0",
         }
@@ -271,7 +271,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "user_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "UMAN111111HDFRRL09",
             "rfc": "UMAN111111AB0",
         }
@@ -299,7 +299,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": manager_account["email"],
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "DMAN111111HDFRRL09",
             "rfc": "DMAN111111AB0",
         }
@@ -326,7 +326,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "missing@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "MMAN111111HDFRRL09",
             "rfc": "MMAN111111AB0",
         }
@@ -354,7 +354,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "phone_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "PMAN111111HDFRRL09",
             "rfc": "PMAN111111AB0",
         }
@@ -382,7 +382,7 @@ class TestManagerCreate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "curp_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "INVALID",
             "rfc": "CMAN111111AB0",
         }
@@ -488,7 +488,7 @@ class TestManagerUpdate:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "target_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "TRGT111111HDFRRL09",
             "rfc": "TRGT111111AB0",
         }
@@ -554,7 +554,7 @@ class TestManagerDelete:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "delete_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "DELM111111HDFRRL09",
             "rfc": "DELM111111AB0",
         }
@@ -597,7 +597,7 @@ class TestManagerDelete:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "admin_delete_manager@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "ADLM111111HDFRRL09",
             "rfc": "ADLM111111AB0",
         }
@@ -632,7 +632,7 @@ class TestManagerDelete:
             "postal_code": "06500",
             "birth_date": datetime(1990, 6, 15).isoformat(),
             "email": "manager_delete@test.com",
-            "password_hash": "TestPass123!",
+            "password": "TestPass123!",
             "curp": "MDLM111111HDFRRL09",
             "rfc": "MDLM111111AB0",
         }
