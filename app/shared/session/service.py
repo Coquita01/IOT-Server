@@ -9,13 +9,14 @@ from app.config import settings
 
 from .exceptions import (
     InvalidRefreshTokenException,
+    InvalidTagException,
     InvalidTokenException,
     RateLimitExceededException,
     SessionExpiredException,
     SessionNotFoundException,
     TokenBlacklistedException,
 )
-from .models import SessionData, SessionTokens, UserData
+from .models import SessionData, SessionTokens, UserData, EntitySessionData, EntitySessionResponse, EntitySessionKeyResponse
 from .repository import SessionRepository
 from .security import JWEHandler
 
@@ -31,6 +32,92 @@ class SessionService:
     
     async def close(self):
         await self._repository.close()
+    
+    def _extract_entity_type(self, entity_id: str) -> str:
+        if entity_id.startswith("user_"):
+            return "user"
+        elif entity_id.startswith("device_"):
+            return "device"
+        elif entity_id.startswith("application_") or entity_id.startswith("app_"):
+            return "application"
+        else:
+            raise ValueError(f"Unknown entity type in ID: {entity_id}")
+    
+    async def check_active_session(self, entity_id: str) -> bool:
+        entity_type = self._extract_entity_type(entity_id)
+        valkey_key = f"session:{entity_type}:{entity_id}"
+        return await self._repository.exists(valkey_key)
+    
+    async def create_entity_session(
+        self,
+        entity_id: str,
+        key_session: str,
+        ip: str,
+        user_agent: str
+    ) -> EntitySessionResponse:
+        entity_type = self._extract_entity_type(entity_id)
+        session_id = secrets.token_urlsafe(32)
+        
+        now = datetime.now(timezone.utc)
+        session_data = EntitySessionData(
+            session_id=session_id,
+            entity_id=entity_id,
+            entity_type=entity_type,
+            key_session=key_session,
+            ip_address=ip,
+            user_agent=user_agent,
+            created_at=now,
+            last_activity=now
+        )
+        
+        await self._repository.store_entity_session(
+            entity_id=entity_id,
+            entity_type=entity_type,
+            session_data=session_data,
+            ttl_seconds=259200
+        )
+        
+        token_payload = {
+            "session_id": session_id,
+            "entity_id": entity_id,
+            "entity_type": entity_type
+        }
+        encrypted_token = self._jwe_handler.encrypt_with_key(
+            data=token_payload,
+            key_session=key_session,
+            ttl_minutes=30
+        )
+        
+        return EntitySessionResponse(
+            session_id=session_id,
+            encrypted_token=encrypted_token,
+            key_session=key_session
+        )
+    
+    async def process_encrypted_request(
+        self,
+        session_id: str,
+        tag: str,
+        pf: str
+    ) -> EntitySessionKeyResponse:
+        session_data = await self._repository.get_entity_session_by_id(session_id)
+        
+        if not session_data:
+            raise SessionNotFoundException()
+        
+        is_valid = self._jwe_handler.verify_hmac(
+            session_id=session_id,
+            payload=pf,
+            tag=tag,
+            key_session=session_data.key_session
+        )
+        
+        if not is_valid:
+            raise InvalidTagException()
+        
+        return EntitySessionKeyResponse(
+            key_session=session_data.key_session
+        )
     
     async def create_session_with_tokens(
         self,

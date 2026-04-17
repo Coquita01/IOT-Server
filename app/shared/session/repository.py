@@ -4,7 +4,7 @@ from typing import Optional
 
 import valkey.asyncio as valkey
 
-from .models import SessionData
+from .models import SessionData, EntitySessionData
 
 
 class SessionRepository:
@@ -141,3 +141,69 @@ class SessionRepository:
     async def is_rate_limited(self, ip_address: str, max_attempts: int = 3) -> bool:
         count = await self.get_rate_limit(ip_address)
         return count >= max_attempts
+    
+    async def exists(self, key: str) -> bool:
+        await self.connect()
+        exists = await self.client.exists(key)
+        return bool(exists)
+    
+    async def store_entity_session(
+        self,
+        entity_id: str,
+        entity_type: str,
+        session_data: EntitySessionData,
+        ttl_seconds: int = 259200,
+    ) -> None:
+        await self.connect()
+        
+        key = f"session:{entity_type}:{entity_id}"
+        value = session_data.model_dump_json()
+        
+        await self.client.setex(key, ttl_seconds, value)
+    
+    async def get_entity_session(
+        self,
+        entity_id: str,
+        entity_type: str
+    ) -> Optional[EntitySessionData]:
+        await self.connect()
+        
+        key = f"session:{entity_type}:{entity_id}"
+        data = await self.client.get(key)
+        
+        if not data:
+            return None
+        
+        try:
+            session_dict = json.loads(data)
+            return EntitySessionData(**session_dict)
+        except (json.JSONDecodeError, ValueError):
+            await self.client.delete(key)
+            return None
+    
+    async def get_entity_session_by_id(
+        self,
+        session_id: str
+    ) -> Optional[EntitySessionData]:
+        await self.connect()
+        
+        cursor = 0
+        pattern = "session:*"
+        
+        while True:
+            cursor, keys = await self.client.scan(cursor, match=pattern, count=100)
+            
+            for key in keys:
+                data = await self.client.get(key)
+                if data:
+                    try:
+                        session_dict = json.loads(data)
+                        if session_dict.get("session_id") == session_id:
+                            return EntitySessionData(**session_dict)
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+            
+            if cursor == 0:
+                break
+        
+        return None
