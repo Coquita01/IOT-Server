@@ -11,6 +11,8 @@ from app.database.model import (
     Application,
     ServiceTicket,
     EcosystemTicket,
+    Role,
+    UserRole,
 )
 
 
@@ -29,6 +31,8 @@ def init_oso() -> Oso:
     oso.register_class(Application)
     oso.register_class(ServiceTicket)
     oso.register_class(EcosystemTicket)
+    oso.register_class(Role)
+    oso.register_class(UserRole)
     oso.register_class(ServiceTicket, name="Ticket")
     
     policy_dir = Path(__file__).parent

@@ -62,6 +62,15 @@ allow(user: CurrentUser, "read", _resource: Service) if
 allow(user: CurrentUser, "read", _resource: Application) if
     user.account_type = "manager";
 
+# Manager - Role Management (UserRole assignment)
+allow(user: CurrentUser, action, _resource: Role) if
+    user.account_type = "manager" and
+    action in ["read", "write"];
+
+allow(user: CurrentUser, action, _resource: UserRole) if
+    user.account_type = "manager" and
+    action in ["read", "write", "delete"];
+
 # User
 allow(user: CurrentUser, "read", _resource: Device) if
     user.account_type = "user";
