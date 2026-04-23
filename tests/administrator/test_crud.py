@@ -244,7 +244,7 @@ class TestAdministratorCreate:
             json=admin_data,
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 500
+        assert response.status_code == 422
 
     def test_create_administrator_missing_required_field(
         self, client: TestClient, master_admin_account: dict
@@ -789,7 +789,7 @@ class TestAdministratorDelete:
         master_admin_account: dict,
         regular_admin_account: dict,
     ):
-        """Test deleting administrator as regular admin."""
+        """Regular admin cannot delete administrators."""
         token = create_token(regular_admin_account)
         response = client.delete(
             f"/api/v1/administrators/{master_admin_account['id']}",
@@ -800,10 +800,21 @@ class TestAdministratorDelete:
     def test_delete_administrator_as_user_forbidden(
         self, client: TestClient, user_account: dict, regular_admin_account: dict
     ):
-        """Test deleting administrator as user."""
+        """User cannot delete administrators."""
         token = create_token(user_account)
         response = client.delete(
             f"/api/v1/administrators/{regular_admin_account['id']}",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert response.status_code == 403
+
+    def test_master_admin_cannot_delete_self(
+            self, client: TestClient, master_admin_account: dict
+    ):
+        """Master admin cannot delete its own account."""
+        token = create_token(master_admin_account)
+        response = client.delete(
+            f"/api/v1/administrators/{master_admin_account['id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 400

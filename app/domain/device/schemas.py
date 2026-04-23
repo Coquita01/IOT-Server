@@ -1,5 +1,6 @@
 import re
 from ipaddress import ip_address
+from uuid import UUID
 
 from pydantic import BaseModel, field_validator
 
@@ -78,3 +79,13 @@ class DeviceResponse(BaseSchemaResponse):
     ip: str | None = None
     mac: str | None = None
     is_active: bool
+
+
+class PuzzlePayload(BaseModel):
+    ciphertext: str
+    iv: str
+
+
+class PuzzleRequest(BaseModel):
+    device_id: UUID
+    encrypted_payload: PuzzlePayload

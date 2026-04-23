@@ -18,6 +18,7 @@ from app.database.model import (
     Manager,
 )
 from app.domain.auth.security import get_password_hash
+from copy import deepcopy
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -329,6 +330,11 @@ def get_valid_personal_data() -> dict:
         "birth_date": datetime(1990, 6, 15).isoformat(),
         "email": "test@example.com",
         "password": "TestPass123!",
-        "curp": "ABCD111111HDFRRL09",
-        "rfc": "ABCD111111AB0",
+        "curp": "PEMJ900615HDFLRN07",
+        "rfc": "PEMJ900615AB1",
     }
+
+
+@pytest.fixture
+def valid_personal_data():
+    return deepcopy(get_valid_personal_data())

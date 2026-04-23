@@ -25,7 +25,7 @@ from app.shared.session.service import SessionService
 
 
 # Test configuration
-VALKEY_TEST_URL = "valkey://localhost:6379/1"  # Use DB 1 for tests
+VALKEY_TEST_URL = "valkey://localhost:6380/1"  # Use DB 1 for tests
 # Valid base64 AES-256 key (32 bytes): b'0123456789abcdef0123456789abcdef'
 TEST_ENCRYPTION_KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 
