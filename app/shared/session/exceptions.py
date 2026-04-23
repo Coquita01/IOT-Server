@@ -1,24 +1,23 @@
-"""Custom exceptions for session management."""
-
 from fastapi import HTTPException, status
 
 
 class SessionNotFoundException(HTTPException):
-    """Raised when session is not found in Valkey."""
-    
-    def __init__(self, user_id: str = None):
-        detail = "Session not found"
-        if user_id:
-            detail = f"Session not found for user {user_id}"
+    def __init__(self):
         super().__init__(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=detail,
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+
+class SessionAlreadyExistsException(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active session already exists for this entity",
         )
 
 
 class InvalidRefreshTokenException(HTTPException):
-    """Raised when refresh token is invalid or expired."""
-    
     def __init__(self):
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -26,19 +25,7 @@ class InvalidRefreshTokenException(HTTPException):
         )
 
 
-class TokenBlacklistedException(HTTPException):
-    """Raised when token is blacklisted (revoked)."""
-    
-    def __init__(self):
-        super().__init__(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has been revoked",
-        )
-
-
 class RateLimitExceededException(HTTPException):
-    """Raised when rate limit is exceeded."""
-    
     def __init__(self, retry_after: int = 900):
         super().__init__(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -48,8 +35,6 @@ class RateLimitExceededException(HTTPException):
 
 
 class InvalidTokenException(HTTPException):
-    """Raised when token cannot be decrypted or is malformed."""
-    
     def __init__(self):
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -58,10 +43,40 @@ class InvalidTokenException(HTTPException):
 
 
 class SessionExpiredException(HTTPException):
-    """Raised when session or token has expired."""
-    
     def __init__(self):
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired",
+        )
+
+
+class InvalidTagException(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid request signature",
+        )
+
+
+class InvalidEntityIdException(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid entity_id format",
+        )
+
+
+class InvalidKeySessionException(HTTPException):
+    def __init__(self, reason: str = "Invalid key_session format"):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=reason,
+        )
+
+
+class InvalidMetadataException(HTTPException):
+    def __init__(self, reason: str = "Invalid metadata"):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=reason,
         )

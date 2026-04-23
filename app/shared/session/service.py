@@ -1,23 +1,36 @@
+import base64
+import json
+import logging
 import secrets
 from datetime import datetime, timezone
-from typing import Dict, Optional
-from uuid import uuid4
+from typing import Annotated, Any, Optional
+from uuid import UUID, uuid4
 
-from jose.exceptions import JWEError
+from fastapi import Depends
 
 from app.config import settings
 
 from .exceptions import (
-    InvalidRefreshTokenException,
-    InvalidTokenException,
-    RateLimitExceededException,
-    SessionExpiredException,
+    InvalidEntityIdException,
+    InvalidKeySessionException,
+    InvalidMetadataException,
+    InvalidTagException,
+    SessionAlreadyExistsException,
     SessionNotFoundException,
-    TokenBlacklistedException,
 )
-from .models import SessionData, SessionTokens, UserData
+from .models import (
+    EntitySessionData,
+    EntitySessionResponse,
+    SessionData,
+    SessionTokens,
+)
 from .repository import SessionRepository
 from .security import JWEHandler
+
+
+logger = logging.getLogger(__name__)
+
+_KEY_SESSION_EXPECTED_BYTES = 32
 
 
 class SessionService:
@@ -28,26 +41,186 @@ class SessionService:
     ):
         self._repository = SessionRepository(valkey_url or settings.VALKEY_URL)
         self._jwe_handler = JWEHandler(encryption_key or settings.ENCRYPTION_KEY)
-    
-    async def close(self):
+
+    async def close(self) -> None:
         await self._repository.close()
-    
+
+    # ==============================================================
+    # Entity session API (per-key encryption flow)
+    # ==============================================================
+
+    async def check_active_session(self, entity_id: UUID) -> bool:
+        entity_id_str = self._validate_entity_id(entity_id)
+        return await self._repository.entity_session_exists(entity_id_str)
+
+    async def create_entity_session(
+        self,
+        entity_id: UUID,
+        key_session: str,
+        ip_address: str,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> EntitySessionResponse:
+        entity_id_str = self._validate_entity_id(entity_id)
+        self._validate_key_session(key_session)
+        self._validate_ip_address(ip_address)
+        safe_metadata = self._validate_metadata(metadata)
+
+        if await self._repository.entity_session_exists(entity_id_str):
+            raise SessionAlreadyExistsException()
+
+        session_id = secrets.token_urlsafe(32)
+        now = datetime.now(timezone.utc)
+
+        session_data = EntitySessionData(
+            session_id=session_id,
+            entity_id=entity_id_str,
+            key_session=key_session,
+            ip_address=ip_address,
+            metadata=safe_metadata,
+            created_at=now,
+            last_activity=now,
+        )
+
+        await self._repository.store_entity_session(
+            session_data=session_data,
+            ttl_seconds=settings.SESSION_TTL_SECONDS,
+        )
+
+        logger.info(
+            "Entity session created: entity_id=%s metadata_keys=%d",
+            entity_id_str,
+            len(safe_metadata),
+        )
+
+        return EntitySessionResponse(session_id=session_id)
+
+    async def process_encrypted_request(
+        self,
+        session_id: str,
+        tag: str,
+        payload: str,
+    ) -> str:
+        if not session_id or not tag or not payload:
+            raise InvalidTagException()
+
+        session_data = await self._repository.get_entity_session_by_id(session_id)
+        if not session_data:
+            raise SessionNotFoundException()
+
+        is_valid = JWEHandler.verify_hmac(
+            session_id=session_id,
+            payload=payload,
+            tag=tag,
+            key_session=session_data.key_session,
+        )
+        if not is_valid:
+            logger.warning(
+                "HMAC verification failed: session_id=%s entity_id=%s",
+                session_id,
+                session_data.entity_id,
+            )
+            raise InvalidTagException()
+
+        await self._repository.touch_entity_session(session_data)
+
+        logger.info(
+            "Encrypted request verified: session_id=%s entity_id=%s",
+            session_id,
+            session_data.entity_id,
+        )
+
+        return session_data.key_session
+
+    async def invalidate_entity_session(self, entity_id: UUID) -> None:
+        entity_id_str = self._validate_entity_id(entity_id)
+        await self._repository.delete_entity_session(entity_id_str)
+        logger.info("Entity session invalidated: entity_id=%s", entity_id_str)
+
+    # ==============================================================
+    # Validation helpers
+    # ==============================================================
+
+    @staticmethod
+    def _validate_entity_id(entity_id: UUID) -> str:
+        if isinstance(entity_id, UUID):
+            return str(entity_id)
+        try:
+            return str(UUID(str(entity_id)))
+        except (ValueError, TypeError):
+            raise InvalidEntityIdException()
+
+    @staticmethod
+    def _validate_key_session(key_session: str) -> None:
+        if not key_session:
+            raise InvalidKeySessionException("key_session cannot be empty")
+        try:
+            key_bytes = base64.urlsafe_b64decode(key_session)
+        except Exception:
+            raise InvalidKeySessionException("key_session must be valid urlsafe base64")
+
+        if len(key_bytes) != _KEY_SESSION_EXPECTED_BYTES:
+            raise InvalidKeySessionException(
+                f"key_session must decode to {_KEY_SESSION_EXPECTED_BYTES} bytes"
+            )
+
+    @staticmethod
+    def _validate_ip_address(ip_address: str) -> None:
+        if not ip_address or not ip_address.strip():
+            raise InvalidEntityIdException()
+
+    @staticmethod
+    def _validate_metadata(
+        metadata: Optional[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if metadata is None:
+            return {}
+
+        if not isinstance(metadata, dict):
+            raise InvalidMetadataException("metadata must be a dict")
+
+        if len(metadata) > settings.METADATA_MAX_KEYS:
+            raise InvalidMetadataException(
+                f"metadata cannot have more than {settings.METADATA_MAX_KEYS} keys"
+            )
+
+        forbidden = set(metadata.keys()) & settings.METADATA_FORBIDDEN_KEYS
+        if forbidden:
+            raise InvalidMetadataException(
+                f"metadata contains forbidden keys: {sorted(forbidden)}"
+            )
+
+        try:
+            serialized = json.dumps(metadata)
+        except (TypeError, ValueError):
+            raise InvalidMetadataException("metadata must be JSON-serializable")
+
+        if len(serialized.encode("utf-8")) > settings.METADATA_MAX_SIZE_BYTES:
+            raise InvalidMetadataException(
+                f"metadata exceeds {settings.METADATA_MAX_SIZE_BYTES} bytes"
+            )
+
+        return metadata
+
+    # ==============================================================
+    # Legacy user session API (JWT-based, kept for existing auth flow)
+    # ==============================================================
+
     async def create_session_with_tokens(
         self,
         user_id: str,
-        claims: Dict[str, any],
-        request_info: Dict[str, str],
+        claims: dict[str, Any],
+        request_info: dict[str, str],
     ) -> SessionTokens:
         await self._repository.delete_session(user_id)
-        
+
         token_id = str(uuid4())
         refresh_token = secrets.token_urlsafe(32)
-        
+
         access_token = self._jwe_handler.encrypt(
             claims={**claims, "jti": token_id},
             ttl_minutes=30,
         )
-        
+
         now = datetime.now(timezone.utc)
         session_data = SessionData(
             user_id=user_id,
@@ -61,112 +234,22 @@ class SessionService:
             created_at=now,
             last_activity=now,
         )
-        
+
         await self._repository.store_session(
             user_id=user_id,
             session_data=session_data,
-            ttl_seconds=259200,
+            ttl_seconds=settings.SESSION_TTL_SECONDS,
         )
-        
+
         return SessionTokens(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="Bearer",
         )
-    
-    async def validate_token(self, jwe_token: str) -> Optional[UserData]:
-        try:
-            claims = self._jwe_handler.decrypt(jwe_token)
-        except JWEError:
-            return None
-        
-        if not self._jwe_handler.verify_expiration(claims):
-            return None
-        
-        token_id = claims.get("jti")
-        user_id = claims.get("sub")
-        
-        if not token_id or not user_id:
-            return None
-        
-        is_blacklisted = await self._repository.is_blacklisted(token_id)
-        if is_blacklisted:
-            return None
-        
-        session = await self._repository.get_session(user_id)
-        if not session:
-            return None
-        
-        if session.token_id != token_id:
-            return None
-        
-        await self._repository.update_last_activity(user_id)
-        
-        return UserData(
-            user_id=user_id,
-            email=session.email,
-            account_type=session.account_type,
-            is_master=session.is_master,
-            token_id=token_id,
-        )
-    
-    async def invalidate_session(
-        self,
-        user_id: str,
-        token_id: Optional[str] = None,
-    ) -> None:
-        await self._repository.delete_session(user_id)
-        
-        if token_id:
-            await self._repository.add_to_blacklist(token_id, ttl_seconds=1800)
-    
-    async def rotate_refresh_token(
-        self,
-        refresh_token: str,
-        request_info: Dict[str, str],
-    ) -> Optional[SessionTokens]:
-        user_id = await self._repository.get_user_by_refresh_token(refresh_token)
-        if not user_id:
-            return None
-        
-        session = await self._repository.get_session(user_id)
-        if not session:
-            return None
-        
-        if session.refresh_token != refresh_token:
-            return None
-        
-        await self._repository.add_to_blacklist(session.token_id, ttl_seconds=1800)
-        
-        new_token_id = str(uuid4())
-        new_refresh_token = secrets.token_urlsafe(32)
-        
-        claims = {
-            "sub": user_id,
-            "email": session.email,
-            "type": session.account_type,
-            "is_master": session.is_master,
-            "jti": new_token_id,
-        }
-        new_access_token = self._jwe_handler.encrypt(claims, ttl_minutes=30)
-        
-        session.token_id = new_token_id
-        session.refresh_token = new_refresh_token
-        session.last_activity = datetime.now(timezone.utc)
-        session.ip_address = request_info.get("ip_address", session.ip_address)
-        session.user_agent = request_info.get("user_agent", session.user_agent)
-        
-        await self._repository.store_session(user_id, session, ttl_seconds=259200)
-        
-        return SessionTokens(
-            access_token=new_access_token,
-            refresh_token=new_refresh_token,
-            token_type="Bearer",
-        )
-    
+
     async def check_rate_limit(self, ip_address: str, max_attempts: int = 3) -> bool:
         return await self._repository.is_rate_limited(ip_address, max_attempts)
-    
+
     async def increment_rate_limit(
         self,
         ip_address: str,
@@ -177,12 +260,16 @@ class SessionService:
             ip_address,
             window_seconds,
         )
-    
+
     async def reset_rate_limit(self, ip_address: str) -> None:
         await self._repository.reset_rate_limit(ip_address)
-    
-    async def is_token_blacklisted(self, token_id: str) -> bool:
-        return await self._repository.is_blacklisted(token_id)
-    
+
     async def get_session(self, user_id: str) -> Optional[SessionData]:
         return await self._repository.get_session(user_id)
+
+
+def get_session_service() -> SessionService:
+    return SessionService()
+
+
+SessionServiceDep = Annotated[SessionService, Depends(get_session_service)]
