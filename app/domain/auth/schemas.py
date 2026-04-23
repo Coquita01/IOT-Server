@@ -1,4 +1,11 @@
+import re
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+PASSWORD_COMPLEXITY_RE = re.compile(
+    r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])\S{8,128}$"
+)
 
 
 class LoginRequest(BaseModel):
@@ -28,6 +35,18 @@ class ChangePasswordRequest(BaseModel):
 
     current_password: str = Field(min_length=8, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        password = value.strip()
+
+        if not PASSWORD_COMPLEXITY_RE.fullmatch(password):
+            raise ValueError(
+                "password must include uppercase, lowercase, number and special character"
+            )
+
+        return password
 
 
 class MessageResponse(BaseModel):

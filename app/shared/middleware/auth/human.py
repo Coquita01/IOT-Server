@@ -7,9 +7,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from app.config import settings
 from app.database import engine
 from app.database.model import Administrator, Manager, User
 from app.domain.auth.security import decode_access_token
+from app.shared.session.repository import SessionRepository
 
 
 PUBLIC_PATHS = {
@@ -18,6 +20,7 @@ PUBLIC_PATHS = {
     "/redoc",
     "/api/v1/auth/login",
 }
+
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,7 @@ class Human(BaseHTTPMiddleware):
             return await call_next(request)
 
         request.state.current_account = None
+        request.state.token_payload = None
 
         auth_header = request.headers.get("Authorization")
         if not auth_header:
@@ -43,8 +47,20 @@ class Human(BaseHTTPMiddleware):
 
         token = auth_header.replace("Bearer ", "", 1).strip()
 
+        session_repository = SessionRepository(settings.VALKEY_URL)
+
         try:
             payload = decode_access_token(token)
+            request.state.token_payload = payload
+
+            token_id = payload.get("jti")
+            if token_id:
+                is_blacklisted = await session_repository.is_blacklisted(token_id)
+                if is_blacklisted:
+                    return JSONResponse(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        content={"detail": "Token has been revoked"},
+                    )
 
             raw_account_id = payload.get("sub")
             account_type = payload.get("type")
@@ -100,5 +116,7 @@ class Human(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Invalid or expired token"},
             )
+        finally:
+            await session_repository.close()
 
         return await call_next(request)

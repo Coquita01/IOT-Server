@@ -226,6 +226,7 @@ class Device(BaseTable, table=True):
     serial_number: str | None = Field(default=None, unique=True)
     ip: str | None = None
     mac: str | None = Field(default=None, unique=True)
+    encryption_key: str | None = None
     is_active: bool = Field(default=True)
 
     device_services: list["DeviceService"] = Relationship(
